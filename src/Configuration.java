@@ -26,6 +26,7 @@ public class Configuration
 	private static final String agmQueriesFilePath;
 	private static final String agmUserAndPasswordFilePath;
 	private static final String groupIDsForThemesFilePath;
+	private static final String groupIDsForReleasesFilePath;
 	private static final String lastPostedDefectDateTimeFilePath;
 	private static final String proxyUrlFilePath;
 	private static final String slackWebApiTokenFilePath;
@@ -44,6 +45,7 @@ public class Configuration
 		agmQueriesFilePath = configurationFolderPath + "\\agmQueries.txt";
 		agmUserAndPasswordFilePath = configurationFolderPath + "\\agmUserAndPassword.txt";
 		groupIDsForThemesFilePath = configurationFolderPath + "\\groupIDsForThemes.txt";
+		groupIDsForReleasesFilePath = configurationFolderPath + "\\groupIDsForReleases.txt";
 		lastPostedDefectDateTimeFilePath = configurationFolderPath + "\\lastPostedDefectDateTime.txt";
 		proxyUrlFilePath = configurationFolderPath + "\\proxyUrl.txt";
 		slackWebApiTokenFilePath = configurationFolderPath + "\\slackWebApiToken.txt";
@@ -119,17 +121,48 @@ public class Configuration
 				}
 			}
 		}
-		catch (FileNotFoundException e)
-		{
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
 		catch (IOException e)
 		{
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		return groupIDsForThemes;
+	}
+	
+	public static HashMap<String, HashSet<String>> readGroupIDsForReleases()
+	{
+		HashMap<String, HashSet<String>> groupIDsForReleases = new HashMap<String, HashSet<String>>();
+		
+		try (BufferedReader reader = new BufferedReader(new FileReader(groupIDsForReleasesFilePath)))
+		{
+			String partsSeparator = "/";
+			String line = null;
+			while ((line = reader.readLine()) != null)
+			{
+				String[] parts = line.split(partsSeparator);
+				if (parts.length >= 2)
+				{
+					String release = parts[0];
+					String groupID = parts[1];
+					if (groupIDsForReleases.containsKey(release))
+					{
+						groupIDsForReleases.get(release).add(groupID);
+					}
+					else
+					{
+						HashSet<String> groupIDs = new HashSet<String>();
+						groupIDs.add(groupID);
+						groupIDsForReleases.put(release, groupIDs);
+					}
+				}
+			}
+		}
+		catch (IOException e)
+		{
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return groupIDsForReleases;
 	}
 	
 	public static OffsetDateTime readLastPostedDefectDateTime()
