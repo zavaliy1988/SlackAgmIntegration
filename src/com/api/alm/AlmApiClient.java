@@ -129,6 +129,7 @@ public class AlmApiClient
 							case "name" : defect.name = propertyValue; break;
 							case "severity" : defect.severity = propertyValue; break;
 							case "status" : defect.status = propertyValue; break;
+							case "detected-in-rel" : defect.detected_in_rel = propertyReferenceValue; break;
 							case "target-rel" : defect.target_rel = propertyReferenceValue; break;
 							case "user-16" : defect.user_16_subarea = propertyValue; break;
 							case "owner" : defect.owner_dev = propertyValue; break;

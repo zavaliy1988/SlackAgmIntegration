@@ -91,20 +91,7 @@ public class SLLogic
 		
 		if (almApiClient.authenticate(username, password))
 		{
-			HashMap<String, HashSet<String>> groupIDsForThemes = Configuration.readGroupIDsForThemes();
-			HashSet<String> themesToNotify = new HashSet<String>(groupIDsForThemes.keySet());
-			HashSet<String> groupIDsToNotify = new HashSet<String>();
-			groupIDsForThemes.values().parallelStream().distinct().forEach((groupIDs) -> {	groupIDsToNotify.addAll(groupIDs); });
-
-			ArrayList<String> queries = Configuration.readAgmQueries();
-			queries = modifyQueries(queries);
-			ArrayList<AlmDefect> almDefects = getAlmDefectsForQueries(queries);
-			HashMap<String, HashSet<AlmDefect>> defectsForThemes = getAlmDefectsForThemes(almDefects);
-			HashMap<String, HashSet<AlmDefect>> almDefectsForThemesToNotify = extractAlmDefectsForThemesToNotify(themesToNotify, defectsForThemes);
-			
-			HashMap<String, ArrayList<SLMessage>> messagesForGroups = getMessagesForGroups(groupIDsToNotify);
-			
-			PerformSendingLogic(groupIDsForThemes, messagesForGroups, almDefectsForThemesToNotify);
+			performSendingLogic();
 		}
 		else
 		{
@@ -112,76 +99,128 @@ public class SLLogic
 		}
 	}
 	
-	private void PerformSendingLogic(HashMap<String, HashSet<String>> groupIDsForThemes, HashMap<String, ArrayList<SLMessage>> messagesForGroups, HashMap<String, HashSet<AlmDefect>> almDefectsForThemesToNotify)
+	private void performSendingLogic()
 	{
-		groupIDsForThemes.forEach((theme, groupIDs) ->
+		HashMap<String, HashSet<String>> groupIDsForThemes = Configuration.readGroupIDsForThemes();
+		HashSet<String> themesToNotify = new HashSet<String>(groupIDsForThemes.keySet());
+		HashSet<String> groupIDsToNotify = new HashSet<String>();
+		groupIDsForThemes.values().parallelStream().forEach((groupIDs) -> {	groupIDsToNotify.addAll(groupIDs); });
+		
+		HashMap<String, HashSet<String>> groupIDsForReleases = Configuration.readGroupIDsForReleases();
+		groupIDsForReleases.values().parallelStream().forEach((groupIDs) -> { groupIDsToNotify.addAll(groupIDs); });
+		
+		ArrayList<String> queries = Configuration.readAgmQueries();
+		queries = modifyQueries(queries);
+		HashSet<AlmDefect> almDefects = getAlmDefectsForQueries(queries);
+		HashMap<AlmDefect, String> themesForDefects = getThemesForAlmDefects(almDefects);
+		HashMap<String, HashSet<AlmDefect>> almDefectsForThemesToNotify = extractAlmDefectsForThemesToNotify(themesToNotify, themesForDefects);
+		
+		HashMap<String, ArrayList<SLMessage>> messagesForGroups = getMessagesForGroups(groupIDsToNotify);
+		HashMap<String, ArrayList<SimpleEntry<AlmDefect, SLPostedEntity>>> postedEntitesForGroups = new HashMap<>();
+		
+		groupIDsToNotify.stream().forEach((groupID) ->
 		{
-			HashSet<AlmDefect> almDefectsForThemeToNotify = almDefectsForThemesToNotify.get(theme);
-			groupIDs.forEach((groupID) ->
-			{
-				ArrayList<SLMessage> messagesForGroup = messagesForGroups.get(groupID);
-				ArrayList<SimpleEntry<AlmDefect, SLPostedEntity>> res = findPostedEntitiesInMessages(almDefectsForThemeToNotify, messagesForGroup);
-				res.parallelStream().forEach((pair) -> 
-				{
-					AlmDefect almDefect = pair.getKey();
-					SLDefect slackDefect = pair.getValue().defect;
-					SLComment slackComment = pair.getValue().lastComment;
-					boolean defectStatusWasUpdated = false;
-					if (slackDefect.wasPosted)
-					{
-						if (!almDefect.status.equals(slackDefect.status))
-						{
-							if (postDefect(groupID, almDefect))
-							{
-								defectStatusWasUpdated = true;
-								saveLastPostedDefectDateTimeToConfiguration(almDefect.last_modified);
-							}
-							else
-							{
-								// handle
-							}
-						}
-					}
-					else
-					{
-						if (!almDefect.status.equals("Closed"))
-						{
-							if (postDefect(groupID, almDefect))
-							{
-								defectStatusWasUpdated = true;
-								saveLastPostedDefectDateTimeToConfiguration(almDefect.last_modified);
-							}
-							else
-							{
-								// handle
-							}
-						}
-					}
-					
-					if (!almDefect.status.equals("Closed"))
-					{
-						if (! defectStatusWasUpdated)
-						{
-							if (almDefect.comments.size() > 0)
-							{
-								String almLastComment = almDefect.comments.get(almDefect.comments.size() - 1);
-								if (!almLastComment.equals(slackComment.message))
-								{
-									if (postComment(groupID, almDefect))
-									{
-										saveLastPostedDefectDateTimeToConfiguration(almDefect.last_modified);
-									}
-									else
-									{
-										// handle
-									}
-								}
-							}
-						}
-					}
-				});
-			});
+			ArrayList<SLMessage> messagesForGroup = messagesForGroups.get(groupID);
+			ArrayList<SimpleEntry<AlmDefect, SLPostedEntity>> res = findPostedEntitiesInMessages(almDefects, messagesForGroup);
+			postedEntitesForGroups.put(groupID, res);
 		});
+		
+		
+		themesForDefects.forEach((defect, theme) ->
+		{
+			if (groupIDsForReleases.containsKey(defect.target_rel))
+			{
+				groupIDsForReleases.get(defect.target_rel).forEach((groupID) ->
+				{
+					SingleDefectSendingLogic(defect, groupID, postedEntitesForGroups);
+				});
+			}
+			else
+			{
+				if (groupIDsForThemes.containsKey(theme))
+				{
+					groupIDsForThemes.get(theme).forEach((groupID) ->
+					{
+						SingleDefectSendingLogic(defect, groupID, postedEntitesForGroups);
+					});
+				}
+			}
+		});
+	}
+	
+	private void SingleDefectSendingLogic(AlmDefect defect, String groupID, HashMap<String, ArrayList<SimpleEntry<AlmDefect, SLPostedEntity>>> postedEntitesForGroups)
+	{
+		ArrayList<SimpleEntry<AlmDefect, SLPostedEntity>> postedEntitiesForGroup = postedEntitesForGroups.get(groupID);
+		boolean defectFound = false;
+		boolean defectStatusWasUpdated = false;
+		SLDefect slackDefect = null;
+		SLComment slackComment = null;
+		for (int i = 0; i < postedEntitiesForGroup.size(); i++)
+		{
+			SimpleEntry<AlmDefect, SLPostedEntity> pair = postedEntitiesForGroup.get(i);
+			AlmDefect almDefect = pair.getKey();
+			slackDefect = pair.getValue().defect;
+			slackComment = pair.getValue().lastComment;
+		
+			if (defect.id.equals(slackDefect.id))
+			{
+				defectFound = true;
+				break;
+			}
+		}
+		
+		if (defectFound)
+		{
+			if (!defect.status.equals(slackDefect.status))
+			{
+				if (postDefect(groupID, defect))
+				{
+					defectStatusWasUpdated = true;
+					saveLastPostedDefectDateTimeToConfiguration(defect.last_modified);
+				}
+				else
+				{
+					// handle
+				}
+			}
+		}
+		else
+		{
+			if (!defect.status.equals("Closed"))
+			{
+				if (postDefect(groupID, defect))
+				{
+					defectStatusWasUpdated = true;
+					saveLastPostedDefectDateTimeToConfiguration(defect.last_modified);
+				}
+				else
+				{
+					// handle
+				}
+			}
+		}
+		
+		if (!defect.status.equals("Closed"))
+		{
+			if (! defectStatusWasUpdated)
+			{
+				if (defect.comments.size() > 0)
+				{
+					String almLastComment = defect.comments.get(defect.comments.size() - 1);
+					if (!almLastComment.equals(slackComment.message))
+					{
+						if (postComment(groupID, defect))
+						{
+							saveLastPostedDefectDateTimeToConfiguration(defect.last_modified);
+						}
+						else
+						{
+							// handle
+						}
+					}
+				}
+			}
+		}
 	}
 	
 	private ArrayList<String> modifyQueries(ArrayList<String> queries)
@@ -210,9 +249,9 @@ public class SLLogic
 		return queries;
 	}
 	
-	private ArrayList<AlmDefect> getAlmDefectsForQueries(ArrayList<String> queries)
+	private HashSet<AlmDefect> getAlmDefectsForQueries(ArrayList<String> queries)
 	{
-		ArrayList<AlmDefect> defects = new ArrayList<AlmDefect>();
+		HashSet<AlmDefect> defects = new HashSet<AlmDefect>();
 		queries.parallelStream().forEach((q) ->
 		{
 			ArrayList<AlmDefect> almDefectsForQuery = almApiClient.getDefects(q);
@@ -221,45 +260,40 @@ public class SLLogic
 		return defects;
 	}
 	
-	private HashMap<String, HashSet<AlmDefect>> getAlmDefectsForThemes(ArrayList<AlmDefect> defects)
+	private HashMap<AlmDefect, String> getThemesForAlmDefects(HashSet<AlmDefect> defects)
 	{
-		HashMap<String, HashSet<AlmDefect>> defectsForThemes = new HashMap<String, HashSet<AlmDefect>>();
+		HashMap<AlmDefect, String> themesForDefects = new HashMap<AlmDefect, String>();
 		defects.parallelStream().forEach((defect) -> 
 		{
 			ArrayList<AlmReleaseBacklogItem> releaseBacklogItems = almApiClient.getReleaseBacklogItems("entity-type[defect];entity-id[" + defect.id + "]");
 			if (releaseBacklogItems.size() > 0)
 			{
 				String theme_id = releaseBacklogItems.get(0).theme_id;
-				if (defectsForThemes.containsKey(theme_id))
-				{
-					defectsForThemes.get(theme_id).add(defect);
-				}
-				else
-				{
-					HashSet<AlmDefect> almDefectsForTheme = new HashSet<AlmDefect>();
-					almDefectsForTheme.add(defect);
-					defectsForThemes.put(theme_id, almDefectsForTheme);
-				}
+				themesForDefects.put(defect, theme_id);
 			}
 		});
-		return defectsForThemes;
+		return themesForDefects;
 	}
 	
-	private HashMap<String, HashSet<AlmDefect>> extractAlmDefectsForThemesToNotify(HashSet<String> themes, HashMap<String, HashSet<AlmDefect>> defectsForThemes)
+	private HashMap<String, HashSet<AlmDefect>> extractAlmDefectsForThemesToNotify(HashSet<String> themes, HashMap<AlmDefect, String> themesForDefects)
 	{
 		HashMap<String, HashSet<AlmDefect>> defectsForThemesToNotify = new HashMap<String, HashSet<AlmDefect>>();
 		HashSet<AlmDefect> dummyDefect = new HashSet<AlmDefect>();
+
 		themes.forEach((theme) ->
 		{
-			if (defectsForThemes.containsKey(theme))
+			HashSet<AlmDefect> defects = new HashSet<AlmDefect>();
+			defectsForThemesToNotify.put(theme, defects);
+		});
+		
+		themesForDefects.forEach((defect, theme) ->
+		{
+			if (themes.contains(theme))
 			{
-				defectsForThemesToNotify.put(theme, defectsForThemes.get(theme));
-			}
-			else 
-			{
-				defectsForThemesToNotify.put(theme, dummyDefect);
+				defectsForThemesToNotify.get(theme).add(defect);
 			}
 		});
+
 		return defectsForThemesToNotify;
 	}
 	

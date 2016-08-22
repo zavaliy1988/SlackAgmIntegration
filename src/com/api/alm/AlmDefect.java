@@ -9,6 +9,7 @@ public class AlmDefect
 	public String name;
 	public String severity;
 	public String status;
+	public String detected_in_rel;
 	public String target_rel;
 	public String user_16_subarea;
 	public String owner_dev;
@@ -23,6 +24,7 @@ public class AlmDefect
 		name = "";
 		severity = "";
 		status = "";
+		detected_in_rel = "";
 		user_16_subarea = "";
 		owner_dev = "";
 		user_02_qalead = "";
