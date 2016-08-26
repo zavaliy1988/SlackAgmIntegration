@@ -366,6 +366,8 @@ public class SLLogic
 		{
 			ArrayList<SLMessage> messagesForGroup = slWebApiClient.groupHistory(groupID);
 			messagesForGroups.put(groupID, messagesForGroup);
+			ArrayList<SLMessage> messagesForChannel = slWebApiClient.channelHistory(groupID);
+			messagesForGroups.put(groupID, messagesForChannel);
 		}
 		return messagesForGroups;
 	}

@@ -142,7 +142,7 @@ public class SLWebApiClient
 		String response = sendWebApiGetRequest(webApiRootUrl, "groups.history", apiToken, "&channel=" + group_id);
 		if (response != null)
 		{
-			messageList = extractChannelHistory(response);
+			messageList = extractGroupHistory(response);
 			messageList.sort((one, two) -> two.ts.toInstant().compareTo(one.ts.toInstant())); 
 		}
 		return messageList;
@@ -244,17 +244,24 @@ public class SLWebApiClient
 	private ArrayList<SLMessage> extractChannelHistory(String response)
 	{
 		ArrayList<SLMessage> messageList = new ArrayList<SLMessage>();
-		JSONArray messagesJson = new JSONObject(response).getJSONArray("messages");
-		for (Object obj : messagesJson)
+		try
 		{
-			JSONObject messageJson = (JSONObject) obj;
-			SLMessage message = new SLMessage();
-			message.type = SLHelper.extractStringIfExist(messageJson, "type");
-			message.text = SLHelper.extractStringIfExist(messageJson, "text");
-			message.user_id = SLHelper.extractStringIfExist(messageJson, "user");
-			message.upload = SLHelper.extractBooleanIfExist(messageJson, "upload");
-			message.ts = SLHelper.dateTimeFromTimestamp(SLHelper.extractStringIfExist(messageJson, "ts"));
-			messageList.add(message);
+			JSONArray messagesJson = new JSONObject(response).getJSONArray("messages");
+			for (Object obj : messagesJson)
+			{
+				JSONObject messageJson = (JSONObject) obj;
+				SLMessage message = new SLMessage();
+				message.type = SLHelper.extractStringIfExist(messageJson, "type");
+				message.text = SLHelper.extractStringIfExist(messageJson, "text");
+				message.user_id = SLHelper.extractStringIfExist(messageJson, "user");
+				message.upload = SLHelper.extractBooleanIfExist(messageJson, "upload");
+				message.ts = SLHelper.dateTimeFromTimestamp(SLHelper.extractStringIfExist(messageJson, "ts"));
+				messageList.add(message);
+			}
+		}
+		catch (Exception ex)
+		{
+			
 		}
 		return messageList;
 	}
@@ -262,17 +269,24 @@ public class SLWebApiClient
 	private ArrayList<SLMessage> extractGroupHistory(String response)
 	{
 		ArrayList<SLMessage> messageList = new ArrayList<SLMessage>();
-		JSONArray messagesJson = new JSONObject(response).getJSONArray("messages");
-		for (Object obj : messagesJson)
+		try 
 		{
-			JSONObject messageJson = (JSONObject) obj;
-			SLMessage message = new SLMessage();
-			message.type = SLHelper.extractStringIfExist(messageJson, "type");
-			message.text = SLHelper.extractStringIfExist(messageJson, "text");
-			message.user_id = SLHelper.extractStringIfExist(messageJson, "user");
-			message.upload = SLHelper.extractBooleanIfExist(messageJson, "upload");
-			message.ts = SLHelper.dateTimeFromTimestamp(SLHelper.extractStringIfExist(messageJson, "ts"));
-			messageList.add(message);
+			JSONArray messagesJson = new JSONObject(response).getJSONArray("messages");
+			for (Object obj : messagesJson)
+			{
+				JSONObject messageJson = (JSONObject) obj;
+				SLMessage message = new SLMessage();
+				message.type = SLHelper.extractStringIfExist(messageJson, "type");
+				message.text = SLHelper.extractStringIfExist(messageJson, "text");
+				message.user_id = SLHelper.extractStringIfExist(messageJson, "user");
+				message.upload = SLHelper.extractBooleanIfExist(messageJson, "upload");
+				message.ts = SLHelper.dateTimeFromTimestamp(SLHelper.extractStringIfExist(messageJson, "ts"));
+				messageList.add(message);
+			}
+		}
+		catch (Exception ex)
+		{
+			
 		}
 		return messageList;
 	}
