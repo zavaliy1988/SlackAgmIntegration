@@ -36,7 +36,6 @@ public class SLWebApiClient
 	private String apiToken;
 	private String proxyHost;
 	private int proxyPort;
-
 	public SLWebApiClient(String webApiRootUrl, String apiToken)
 	{
 		this.webApiRootUrl = webApiRootUrl;
@@ -127,7 +126,7 @@ public class SLWebApiClient
 	public ArrayList<SLMessage> channelHistory(String channel_id)
 	{
 		ArrayList<SLMessage> messageList = new ArrayList<SLMessage>();
-		String response = sendWebApiGetRequest(webApiRootUrl, "channels.history", apiToken, "&channel=" + channel_id);
+		String response = sendWebApiGetRequest(webApiRootUrl, "channels.history", apiToken, "&channel=" + channel_id, "&count=1000");
 		if (response != null)
 		{
 			messageList = extractChannelHistory(response);
@@ -139,7 +138,7 @@ public class SLWebApiClient
 	public ArrayList<SLMessage> groupHistory(String group_id)
 	{
 		ArrayList<SLMessage> messageList = new ArrayList<SLMessage>();
-		String response = sendWebApiGetRequest(webApiRootUrl, "groups.history", apiToken, "&channel=" + group_id);
+		String response = sendWebApiGetRequest(webApiRootUrl, "groups.history", apiToken, "&channel=" + group_id, "&count=1000");
 		if (response != null)
 		{
 			messageList = extractGroupHistory(response);
